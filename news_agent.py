@@ -13,7 +13,7 @@ GMAIL_APP_PASSWORD= os.environ["GMAIL_APP_PASSWORD"]
 GMAIL_TO          = os.environ["GMAIL_TO"]
 
 # Gemini model to use
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-3.8-flash"
 
 # Free RSS feeds — no API key needed
 FEEDS = [

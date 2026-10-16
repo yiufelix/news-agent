@@ -1,0 +1,25 @@
+name: General Finance News (scheduled + on demand)
+
+on:
+  # Runs at 7:45 AM PST (winter). Change to '45 14 * * *' during PDT.
+  schedule:
+    - cron: '45 15 * * *'
+  workflow_dispatch:   # also gives you a manual "Run workflow" button
+
+jobs:
+  finance-news:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - run: pip install feedparser
+
+      - run: python finance_news.py
+        env:
+          GMAIL_ADDRESS:      ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          FINANCE_NEWS_TO:    ${{ secrets.FINANCE_NEWS_TO }}

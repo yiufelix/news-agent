@@ -19,17 +19,18 @@ GEMINI_MODEL = "gemini-3.5-flash-lite"
 # Free RSS feeds — no API key needed
 FEEDS = [
     "https://feeds.finance.yahoo.com/rss/2.0/headline?s=^GSPC,^DJI,^IXIC&region=US&lang=en-US",
-    "https://www.cnbc.com/id/100003114/device/rss/rss.html",   # CNBC Top News
-    "https://www.cnbc.com/id/10000664/device/rss/rss.html",     # CNBC Markets
-    "https://feeds.a.dj.com/rss/RSSMarketsMain.xml",            # WSJ Markets
-    "https://seekingalpha.com/market_currents.xml",             # Seeking Alpha
-    "https://feeds.content.dowjones.io/public/rss/mw_bulletins",  # MarketWatch Bulletins
-    "https://feeds.bloomberg.com/markets/news.rss",               # Bloomberg Markets
-    "https://www.ft.com/rss/markets",                             # Financial Times Markets
-    "https://www.economist.com/finance-and-economics/rss.xml",    # The Economist Finance
-    "https://eulerpool.com/news/feed.xml",                        # Eulerpool News Agency
-    "https://www.investing.com/rss/news.rss",                     # Investing.com
-    "https://www.forbes.com/investing/feed/",                     # Forbes Investing
+    "https://www.cnbc.com/id/100003114/device/rss/rss.html",       # CNBC Top News
+    "https://www.cnbc.com/id/10000664/device/rss/rss.html",         # CNBC Markets
+    "https://feeds.a.dj.com/rss/RSSMarketsMain.xml",                # WSJ Markets
+    "https://seekingalpha.com/market_currents.xml",                 # Seeking Alpha
+    "https://feeds.content.dowjones.io/public/rss/mw_bulletins",    # MarketWatch Bulletins
+    "https://feeds.bloomberg.com/markets/news.rss",                 # Bloomberg Markets
+    "https://www.ft.com/rss/markets",                               # Financial Times Markets
+    "https://www.economist.com/finance-and-economics/rss.xml",      # The Economist Finance
+    "https://eulerpool.com/news/feed.xml",                          # Eulerpool News Agency
+    "https://www.investing.com/rss/news.rss",                       # Investing.com
+    "https://www.forbes.com/investing/feed/",                       # Forbes Investing
+    "https://news.google.com/rss/search?q=site:reuters.com+when:1d&hl=en-US&gl=US&ceid=US:en",  # Reuters via Google News
 ]
 
 MAX_HEADLINES = 60   # Pull more since we filter aggressively

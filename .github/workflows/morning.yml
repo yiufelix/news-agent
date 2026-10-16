@@ -3,7 +3,7 @@ name: Market Briefing (on demand)
 on:
   # Runs automatically at 8:00 AM PST (winter). Adjust for DST in summer.
   schedule:
-    - cron: '0 16 * * *'   # 16:00 UTC = 8:00 AM PST
+    - cron: '45 15 * * *'   # 15:45 UTC = 7:45 AM PST
   workflow_dispatch:        # keeps the manual "Run workflow" button
 
 jobs:

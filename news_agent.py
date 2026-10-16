@@ -1,4 +1,5 @@
 import os
+import re
 import feedparser
 import requests
 import smtplib
@@ -12,35 +13,34 @@ GMAIL_ADDRESS     = os.environ["GMAIL_ADDRESS"]
 GMAIL_APP_PASSWORD= os.environ["GMAIL_APP_PASSWORD"]
 GMAIL_TO          = os.environ["GMAIL_TO"]
 
-# Gemini model to use
+# Gemini model to use (kept for potential future use; not called in this script)
 GEMINI_MODEL = "gemini-3.5-flash-lite"
 
 # Free RSS feeds — no API key needed
 FEEDS = [
-    # Original feeds
     "https://feeds.finance.yahoo.com/rss/2.0/headline?s=^GSPC,^DJI,^IXIC&region=US&lang=en-US",
     "https://www.cnbc.com/id/100003114/device/rss/rss.html",   # CNBC Top News
     "https://www.cnbc.com/id/10000664/device/rss/rss.html",     # CNBC Markets
     "https://feeds.a.dj.com/rss/RSSMarketsMain.xml",            # WSJ Markets
     "https://seekingalpha.com/market_currents.xml",             # Seeking Alpha
-
-    # New feeds added
     "https://feeds.content.dowjones.io/public/rss/mw_bulletins",  # MarketWatch Bulletins
-    "https://feeds.bloomberg.com/markets/news.rss",               # Bloomberg Markets 
-    "https://www.ft.com/rss/markets",                             # Financial Times Markets 
-    "https://www.economist.com/finance-and-economics/rss.xml",    # The Economist Finance 
-    "https://eulerpool.com/news/feed.xml",                        # Eulerpool News Agency 
-    "https://www.investing.com/rss/news.rss",                     # Investing.com 
-    "https://www.forbes.com/investing/feed/",                     # Forbes Investing 
+    "https://feeds.bloomberg.com/markets/news.rss",               # Bloomberg Markets
+    "https://www.ft.com/rss/markets",                             # Financial Times Markets
+    "https://www.economist.com/finance-and-economics/rss.xml",    # The Economist Finance
+    "https://eulerpool.com/news/feed.xml",                        # Eulerpool News Agency
+    "https://www.investing.com/rss/news.rss",                     # Investing.com
+    "https://www.forbes.com/investing/feed/",                     # Forbes Investing
 ]
 
-MAX_HEADLINES = 30
+MAX_HEADLINES = 60   # Pull more since we filter aggressively
 
 # ---------- TICKER MAP ----------
-# Maps ticker symbol to a list of keywords to match in headlines
+# Maps ticker symbol to a list of keywords to match in headlines.
+# Company names are preferred over bare tickers wherever the ticker is
+# a common English word or abbreviation (e.g. BA, QS, SMR, JPM).
 TICKER_MAP = {
-    "JPM":   ["JPMorgan", "JP Morgan", "JPM"],
-    "SPCX":  ["SpaceX", "Space Exploration", "SPCX"],
+    "JPM":   ["JPMorgan", "JP Morgan", "JPMorgan Chase"],
+    "SPCX":  ["SpaceX", "Space Exploration Technologies", "SPCX"],
     "TSLA":  ["Tesla", "TSLA"],
     "BYDDY": ["BYD", "BYDDY"],
     "LGFRY": ["Longfor", "LGFRY"],
@@ -52,18 +52,18 @@ TICKER_MAP = {
     "NVDA":  ["NVIDIA", "Nvidia", "NVDA"],
     "AMD":   ["Advanced Micro Devices", "AMD"],
     "INTC":  ["Intel", "INTC"],
-    "BA":    ["Boeing", "BA"],
+    "BA":    ["Boeing"],                                # no bare "BA"
     "SNOW":  ["Snowflake", "SNOW"],
     "PLTR":  ["Palantir", "PLTR"],
-    "QS":    ["QuantumScape", "QS"],
+    "QS":    ["QuantumScape"],                          # no bare "QS"
     "BABA":  ["Alibaba", "BABA"],
     "UNH":   ["UnitedHealth", "United Health", "UNH"],
     "RBLX":  ["Roblox", "RBLX"],
     "RKLB":  ["Rocket Lab", "RKLB"],
-    "SMR":   ["NuScale", "SMR"],
+    "SMR":   ["NuScale"],                               # no bare "SMR"
     "SOFI":  ["SoFi", "SOFI"],
     "JOBY":  ["Joby", "JOBY"],
-    "ACHR":  ["Archer", "ACHR"],
+    "ACHR":  ["Archer Aviation", "Archer", "ACHR"],
 }
 
 
@@ -74,7 +74,7 @@ def fetch_headlines():
     for url in FEEDS:
         try:
             feed = feedparser.parse(url)
-            for entry in feed.entries[:8]:
+            for entry in feed.entries[:10]:
                 title = entry.title.strip()
                 if title not in seen:
                     seen.add(title)
@@ -89,56 +89,69 @@ def fetch_headlines():
 
 
 def filter_by_tickers(headlines):
-    """Return only headlines that mention any of our tracked tickers."""
+    """Match headlines using word-boundary regex and company-name priority."""
     matched = []
+    seen_links = set()
+
     for h in headlines:
-        title_lower = h["title"].lower()
+        title = h["title"]
+        title_lower = title.lower()
+
+        if h["link"] in seen_links:
+            continue
+
         for ticker, keywords in TICKER_MAP.items():
-            if any(kw.lower() in title_lower for kw in keywords):
+            hit = False
+            for kw in keywords:
+                # Word-boundary match prevents "BA" from matching "Bajaria",
+                # and "AMD" from matching inside other words.
+                pattern = r"\b" + re.escape(kw.lower()) + r"\b"
+                if re.search(pattern, title_lower):
+                    hit = True
+                    break
+
+            if hit:
                 matched.append({
                     "ticker": ticker,
                     "title": h["title"],
                     "link": h["link"],
                     "source": h["source"],
                 })
+                seen_links.add(h["link"])
                 break  # only tag once per headline
+
+    # Sort by ticker alphabetically, then keep original order within ticker
+    matched.sort(key=lambda m: m["ticker"])
     return matched
 
 
 def build_html_table(matches):
-    """Build an HTML table of matched headlines, grouped by ticker."""
+    """Build an HTML table with one row per headline (no grouping)."""
     if not matches:
-        return "<p>No headlines matched your tracked tickers today.</p>"
-
-    # Group by ticker
-    grouped = {}
-    for m in matches:
-        grouped.setdefault(m["ticker"], []).append(m)
+        return (
+            f"<html><body>"
+            f"<h2>Tracked Stock News — {datetime.now().strftime('%A, %B %d, %Y')}</h2>"
+            f"<p>No headlines matched your tracked tickers today.</p>"
+            f"</body></html>"
+        )
 
     rows = ""
-    for ticker in sorted(grouped.keys()):
-        items = grouped[ticker]
-        # Ticker header row
+    for m in matches:
         rows += (
-            f"<tr style='background-color: #e8f0fe;'>"
-            f"<td colspan='3'><b>{ticker}</b> — {len(items)} headline(s)</td>"
+            f"<tr>"
+            f"<td width='70' style='vertical-align: top;'><b>{m['ticker']}</b></td>"
+            f"<td><a href='{m['link']}'>{m['title']}</a></td>"
+            f"<td width='160' style='vertical-align: top; color: #666;'>{m['source']}</td>"
             f"</tr>"
         )
-        for m in items:
-            rows += (
-                f"<tr>"
-                f"<td width='60'>{m['ticker']}</td>"
-                f"<td><a href='{m['link']}'>{m['title']}</a></td>"
-                f"<td width='140'>{m['source']}</td>"
-                f"</tr>"
-            )
 
     html = f"""
     <html>
-    <body>
+    <body style="font-family: Arial, sans-serif; font-size: 14px;">
     <h2>Tracked Stock News — {datetime.now().strftime('%A, %B %d, %Y')}</h2>
-    <p>{len(matches)} headlines matched your {len(TICKER_MAP)} tracked tickers.</p>
-    <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; font-family: Arial, sans-serif; font-size: 14px;">
+    <p>{len(matches)} headlines matched your tracked tickers.</p>
+    <table border="1" cellpadding="8" cellspacing="0"
+           style="border-collapse: collapse; font-family: Arial, sans-serif; font-size: 14px; width: 100%;">
       <tr style="background-color: #f0f0f0;">
         <th align="left">Ticker</th>
         <th align="left">Headline</th>

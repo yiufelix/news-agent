@@ -26,15 +26,45 @@ FEEDS = [
 
     # New feeds added
     "https://feeds.content.dowjones.io/public/rss/mw_bulletins",  # MarketWatch Bulletins
-    "https://feeds.bloomberg.com/markets/news.rss",               # Bloomberg Markets [citation:2][citation:20]
-    "https://www.ft.com/rss/markets",                             # Financial Times Markets [citation:3]
-    "https://www.economist.com/finance-and-economics/rss.xml",    # The Economist Finance [citation:4]
-    "https://eulerpool.com/news/feed.xml",                        # Eulerpool News Agency [citation:5]
-    "https://www.investing.com/rss/news.rss",                     # Investing.com [citation:15]
-    "https://www.forbes.com/investing/feed/",                     # Forbes Investing [citation:7]
+    "https://feeds.bloomberg.com/markets/news.rss",               # Bloomberg Markets 
+    "https://www.ft.com/rss/markets",                             # Financial Times Markets 
+    "https://www.economist.com/finance-and-economics/rss.xml",    # The Economist Finance 
+    "https://eulerpool.com/news/feed.xml",                        # Eulerpool News Agency 
+    "https://www.investing.com/rss/news.rss",                     # Investing.com 
+    "https://www.forbes.com/investing/feed/",                     # Forbes Investing 
 ]
 
-MAX_HEADLINES = 30  # Bumped up slightly to accommodate more sources
+MAX_HEADLINES = 30
+
+# ---------- TICKER MAP ----------
+# Maps ticker symbol to a list of keywords to match in headlines
+TICKER_MAP = {
+    "JPM":   ["JPMorgan", "JP Morgan", "JPM"],
+    "SPCX":  ["SpaceX", "Space Exploration", "SPCX"],
+    "TSLA":  ["Tesla", "TSLA"],
+    "BYDDY": ["BYD", "BYDDY"],
+    "LGFRY": ["Longfor", "LGFRY"],
+    "ORCL":  ["Oracle", "ORCL"],
+    "CRM":   ["Salesforce", "CRM"],
+    "GOOG":  ["Google", "Alphabet", "GOOG"],
+    "AAPL":  ["Apple", "AAPL"],
+    "AMZN":  ["Amazon", "AMZN"],
+    "NVDA":  ["NVIDIA", "Nvidia", "NVDA"],
+    "AMD":   ["Advanced Micro Devices", "AMD"],
+    "INTC":  ["Intel", "INTC"],
+    "BA":    ["Boeing", "BA"],
+    "SNOW":  ["Snowflake", "SNOW"],
+    "PLTR":  ["Palantir", "PLTR"],
+    "QS":    ["QuantumScape", "QS"],
+    "BABA":  ["Alibaba", "BABA"],
+    "UNH":   ["UnitedHealth", "United Health", "UNH"],
+    "RBLX":  ["Roblox", "RBLX"],
+    "RKLB":  ["Rocket Lab", "RKLB"],
+    "SMR":   ["NuScale", "SMR"],
+    "SOFI":  ["SoFi", "SOFI"],
+    "JOBY":  ["Joby", "JOBY"],
+    "ACHR":  ["Archer", "ACHR"],
+}
 
 
 def fetch_headlines():
@@ -44,7 +74,7 @@ def fetch_headlines():
     for url in FEEDS:
         try:
             feed = feedparser.parse(url)
-            for entry in feed.entries[:8]:  # Limit per feed to avoid one source dominating
+            for entry in feed.entries[:8]:
                 title = entry.title.strip()
                 if title not in seen:
                     seen.add(title)
@@ -58,55 +88,77 @@ def fetch_headlines():
     return headlines[:MAX_HEADLINES]
 
 
-def summarize_with_gemini(headlines):
-    """Ask Gemini to write the briefing."""
-    today = datetime.now().strftime("%A, %B %d, %Y")
-
-    news_text = "\n".join(
-        f"{i+1}. [{h['source']}] {h['title']}"
-        for i, h in enumerate(headlines)
-    )
-
-    prompt = f"""You are a financial news analyst. Today is {today}.
-
-Here are today's top stock market headlines:
-
-{news_text}
-
-Write a concise morning briefing (max 300 words) for a retail investor:
-1. Start with a 2-sentence "market mood" summary.
-2. List the 5 most market-moving stories, each with a 1-2 sentence takeaway on why it matters.
-3. End with a 1-sentence "what to watch today."
-Plain English. No hype. No disclaimers."""
-
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/"
-        f"models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
-    )
-
-    response = requests.post(
-        url,
-        headers={"Content-Type": "application/json"},
-        json={
-            "contents": [
-                {"parts": [{"text": prompt}]}
-            ]
-        },
-        timeout=60,
-    )
-    response.raise_for_status()
-
-    data = response.json()
-    return data["candidates"][0]["content"]["parts"][0]["text"]
+def filter_by_tickers(headlines):
+    """Return only headlines that mention any of our tracked tickers."""
+    matched = []
+    for h in headlines:
+        title_lower = h["title"].lower()
+        for ticker, keywords in TICKER_MAP.items():
+            if any(kw.lower() in title_lower for kw in keywords):
+                matched.append({
+                    "ticker": ticker,
+                    "title": h["title"],
+                    "link": h["link"],
+                    "source": h["source"],
+                })
+                break  # only tag once per headline
+    return matched
 
 
-def send_email(subject, body):
+def build_html_table(matches):
+    """Build an HTML table of matched headlines, grouped by ticker."""
+    if not matches:
+        return "<p>No headlines matched your tracked tickers today.</p>"
+
+    # Group by ticker
+    grouped = {}
+    for m in matches:
+        grouped.setdefault(m["ticker"], []).append(m)
+
+    rows = ""
+    for ticker in sorted(grouped.keys()):
+        items = grouped[ticker]
+        # Ticker header row
+        rows += (
+            f"<tr style='background-color: #e8f0fe;'>"
+            f"<td colspan='3'><b>{ticker}</b> — {len(items)} headline(s)</td>"
+            f"</tr>"
+        )
+        for m in items:
+            rows += (
+                f"<tr>"
+                f"<td width='60'>{m['ticker']}</td>"
+                f"<td><a href='{m['link']}'>{m['title']}</a></td>"
+                f"<td width='140'>{m['source']}</td>"
+                f"</tr>"
+            )
+
+    html = f"""
+    <html>
+    <body>
+    <h2>Tracked Stock News — {datetime.now().strftime('%A, %B %d, %Y')}</h2>
+    <p>{len(matches)} headlines matched your {len(TICKER_MAP)} tracked tickers.</p>
+    <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; font-family: Arial, sans-serif; font-size: 14px;">
+      <tr style="background-color: #f0f0f0;">
+        <th align="left">Ticker</th>
+        <th align="left">Headline</th>
+        <th align="left">Source</th>
+      </tr>
+      {rows}
+    </table>
+    </body>
+    </html>
+    """
+    return html
+
+
+def send_email(subject, html_body):
     """Send the briefing via Gmail SMTP."""
-    msg = MIMEMultipart()
+    msg = MIMEMultipart("alternative")
     msg["From"] = GMAIL_ADDRESS
     msg["To"] = GMAIL_TO
     msg["Subject"] = subject
-    msg.attach(MIMEText(body, "plain", "utf-8"))
+    msg.attach(MIMEText(html_body, "html", "utf-8"))
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(GMAIL_ADDRESS, GMAIL_APP_PASSWORD)
@@ -118,27 +170,13 @@ def main():
     headlines = fetch_headlines()
     print(f"Got {len(headlines)} headlines.")
 
-    if not headlines:
-        send_email(
-            "Market Briefing — no headlines",
-            "No market headlines could be fetched today.",
-        )
-        return
+    matches = filter_by_tickers(headlines)
+    print(f"Matched {len(matches)} headlines to tracked tickers.")
 
-    print("Summarizing with Gemini...")
-    summary = summarize_with_gemini(headlines)
+    html = build_html_table(matches)
 
-    subject = f"Morning Market Briefing — {datetime.now().strftime('%b %d %Y')}"
-    body = (
-        f"Morning Market Briefing\n"
-        f"{datetime.now().strftime('%A, %B %d, %Y')}\n"
-        f"{'-' * 40}\n\n"
-        f"{summary}\n\n"
-        f"{'-' * 40}\n"
-        f"Sources: Yahoo, CNBC, WSJ, Seeking Alpha, MarketWatch, Bloomberg, FT, Economist, Eulerpool, Investing.com, Forbes\n"
-    )
-
-    send_email(subject, body)
+    subject = f"Tracked Stock News — {datetime.now().strftime('%b %d %Y')}"
+    send_email(subject, html)
     print("Sent!")
 
 

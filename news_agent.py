@@ -17,14 +17,24 @@ GEMINI_MODEL = "gemini-3.5-flash-lite"
 
 # Free RSS feeds — no API key needed
 FEEDS = [
+    # Original feeds
     "https://feeds.finance.yahoo.com/rss/2.0/headline?s=^GSPC,^DJI,^IXIC&region=US&lang=en-US",
     "https://www.cnbc.com/id/100003114/device/rss/rss.html",   # CNBC Top News
     "https://www.cnbc.com/id/10000664/device/rss/rss.html",     # CNBC Markets
     "https://feeds.a.dj.com/rss/RSSMarketsMain.xml",            # WSJ Markets
     "https://seekingalpha.com/market_currents.xml",             # Seeking Alpha
+
+    # New feeds added
+    "https://feeds.content.dowjones.io/public/rss/mw_bulletins",  # MarketWatch Bulletins
+    "https://feeds.bloomberg.com/markets/news.rss",               # Bloomberg Markets [citation:2][citation:20]
+    "https://www.ft.com/rss/markets",                             # Financial Times Markets [citation:3]
+    "https://www.economist.com/finance-and-economics/rss.xml",    # The Economist Finance [citation:4]
+    "https://eulerpool.com/news/feed.xml",                        # Eulerpool News Agency [citation:5]
+    "https://www.investing.com/rss/news.rss",                     # Investing.com [citation:15]
+    "https://www.forbes.com/investing/feed/",                     # Forbes Investing [citation:7]
 ]
 
-MAX_HEADLINES = 25
+MAX_HEADLINES = 30  # Bumped up slightly to accommodate more sources
 
 
 def fetch_headlines():
@@ -34,7 +44,7 @@ def fetch_headlines():
     for url in FEEDS:
         try:
             feed = feedparser.parse(url)
-            for entry in feed.entries[:10]:
+            for entry in feed.entries[:8]:  # Limit per feed to avoid one source dominating
                 title = entry.title.strip()
                 if title not in seen:
                     seen.add(title)
@@ -125,7 +135,7 @@ def main():
         f"{'-' * 40}\n\n"
         f"{summary}\n\n"
         f"{'-' * 40}\n"
-        f"Sources: Yahoo Finance, CNBC, WSJ, Seeking Alpha\n"
+        f"Sources: Yahoo, CNBC, WSJ, Seeking Alpha, MarketWatch, Bloomberg, FT, Economist, Eulerpool, Investing.com, Forbes\n"
     )
 
     send_email(subject, body)
